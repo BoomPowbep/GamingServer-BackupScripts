@@ -1,0 +1,46 @@
+#!/usr/bin/env python3
+
+import os
+import pysftp
+import subprocess
+from datetime import datetime
+from dotenv import load_dotenv
+
+load_dotenv()
+
+now = datetime.now()
+
+print("\n\n==> STARTING BACKUP %s\n" % now.strftime("%d/%m/%Y %H:%M:%S"))
+
+# 1. Copy server to temp location
+copyDir = subprocess.run(["cp", "-r", "/home/ubuntu/minecraftserver", "/home/ubuntu/backups/temp/minecraftserver"])
+print("cp output (0 = success) => %d" % copyDir.returncode)
+
+backupFileName, backupFileFullPath = "", ""
+
+# 2. Tar server files and name it with datetime
+if copyDir.returncode == 0:
+	now = datetime.now()
+	datetimeString = now.strftime("%d-%m-%Y__%H-%M-%S")
+	backupFileName = "minecraft--" + datetimeString + ".tar.gz"
+	backupFileFullPath = "/home/ubuntu/backups/" + backupFileName
+	tarCopiedDir = subprocess.run(["tar", "-cpzf", backupFileFullPath, "/home/ubuntu/backups/temp/minecraftserver"])
+	print("tar output (0 = success) => %d" % tarCopiedDir.returncode)
+
+# 3. Remove temp dir
+rmTempDir = subprocess.run(["rm", "-rf", "/home/ubuntu/backups/temp/minecraftserver"])
+print("rm output (0 = success) => %d" % rmTempDir.returncode)
+
+# 4. Upload tar to FTP
+hostname, user, passwd = os.getenv("SFTP_HOST"), os.getenv("SFTP_ID"), os.getenv("SFTP_PASSWD")
+
+cnopts = pysftp.CnOpts()
+cnopts.hostkeys = None
+
+with pysftp.Connection(host=hostname, username=user, password=passwd, cnopts=cnopts) as sftp:
+	print("SFTP connection established, sending file...")
+	sftp.put(backupFileFullPath, "")
+
+# 5. Remove local tar file
+rmLocalTar = subprocess.run(["rm", backupFileFullPath])
+print("rm local tar output (0 = success) => %d" % rmLocalTar.returncode)
