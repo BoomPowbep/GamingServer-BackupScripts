@@ -1,0 +1,50 @@
+#!/usr/bin/env python3
+
+# This script is designed to delete old backups on a SFTP remote directory.
+# Usage:  ./eraseOldBackups [days]
+# Where files older than [days] will be deleted.
+
+import os
+import sys
+import pysftp
+from datetime import datetime
+from dotenv import load_dotenv
+
+load_dotenv()
+
+now = datetime.now()
+
+print("\n\n==> STARTING DISTANT BACKUP CLEANING %s\n" % now.strftime("%d/%m/%Y %H:%M:%S"))
+
+# Check if the argument is here and if it i's an int
+if(len(sys.argv) != 2 or sys.argv[1].isnumeric() == False):
+    print("\nUsage:\t\u001b[1m./eraseOldBackups [days]\u001b[0m\n\nWhere files older than [days] will be deleted.\n")
+    exit()
+
+hostname, user, passwd = os.getenv("SFTP_HOST"), os.getenv("SFTP_ID"), os.getenv("SFTP_PASSWD")
+
+# TODO remove this
+# https://stackoverflow.com/questions/38939454/verify-host-key-with-pysftp
+cnopts = pysftp.CnOpts()
+cnopts.hostkeys = None
+
+with pysftp.Connection(host=hostname, username=user, password=passwd, cnopts=cnopts) as sftp:
+    print("Connection established, scanning files...\n")
+
+    # Obtain structure of the remote directory
+    directory_structure = sftp.listdir_attr()
+
+    # Convert numbers of days to number of seconds
+    differenceTimestamp = int(sys.argv[1]) * 86400
+
+    # Print data
+    for attr in directory_structure:
+        attrTimestamp = attr.st_atime
+        currentTimestamp = int(datetime.now().timestamp())
+        if(currentTimestamp - attrTimestamp > differenceTimestamp):
+            print("\u001b[31mDELETE\t=>\t%s\u001b[0m" % attr.filename)
+            sftp.remove(attr.filename)
+        else:
+            print("\u001b[32mKEEP\t=>\t%s\u001b[0m" % attr.filename)
+
+    print("\nDone\n")
